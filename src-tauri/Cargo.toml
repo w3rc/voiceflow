@@ -32,5 +32,10 @@ log = "0.4"
 env_logger = "0.11"
 thiserror = "2"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.12"
+ashpd = { version = "0.10", features = ["tokio"] }
+futures-util = "0.3"
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]

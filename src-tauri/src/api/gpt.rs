@@ -71,7 +71,10 @@ async fn call_gpt(
     system_prompt: &str,
     user_message: &str,
 ) -> Result<String, String> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
     let request = ChatRequest {
         model: "gpt-4o-mini".to_string(),

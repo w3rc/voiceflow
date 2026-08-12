@@ -14,12 +14,13 @@
     "windows": [
       {
         "label": "main",
-        "title": "VoiceFlow Settings",
+        "title": "VoiceFlow",
         "width": 600,
         "height": 500,
         "resizable": true,
         "visible": true,
-        "center": true
+        "center": true,
+        "theme": "Dark"
       },
       {
         "label": "overlay",
@@ -32,6 +33,7 @@
         "alwaysOnTop": true,
         "visible": false,
         "skipTaskbar": true,
+        "focus": false,
         "url": "index.html#overlay"
       }
     ],

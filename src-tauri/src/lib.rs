@@ -12,8 +12,9 @@ use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Emitter, Manager,
+    Emitter, Manager, WindowEvent,
 };
+#[cfg(not(target_os = "linux"))]
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -21,7 +22,7 @@ pub fn run() {
     env_logger::init();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build()) // used on non-Linux
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
@@ -41,6 +42,15 @@ pub fn run() {
             commands::settings::update_settings,
         ])
         .setup(|app| {
+            // Load persisted settings from disk
+            if let Ok(data_dir) = app.path().app_data_dir() {
+                if let Some(saved) = crate::state::load_settings(&data_dir) {
+                    if let Ok(mut config) = app.state::<AppState>().config.try_lock() {
+                        *config = saved;
+                    }
+                }
+            }
+
             // Build system tray menu
             let show_i = MenuItem::with_id(app, "show", "Settings", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -64,44 +74,75 @@ pub fn run() {
                 .build(app)?;
 
             // Register global shortcuts
-            let app_handle = app.handle().clone();
-            let dictation_shortcut =
-                Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyD);
-            let command_shortcut =
-                Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyC);
+            #[cfg(target_os = "linux")]
+            {
+                // On Linux/GNOME Wayland, register a GNOME custom keyboard
+                // shortcut via gsettings and listen on a named pipe for events.
+                platform::hotkeys_linux::start(app.handle().clone());
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                let app_handle = app.handle().clone();
+                let dictation_shortcut =
+                    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyD);
+                let command_shortcut =
+                    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyC);
+                let toggle_shortcut =
+                    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyS);
 
-            app.global_shortcut().on_shortcuts(
-                [dictation_shortcut, command_shortcut],
-                move |_app, shortcut, event| {
-                    let is_dictation = shortcut.matches(
-                        Modifiers::CONTROL | Modifiers::ALT,
-                        Code::KeyD,
-                    );
-                    let is_command = shortcut.matches(
-                        Modifiers::CONTROL | Modifiers::ALT,
-                        Code::KeyC,
-                    );
+                app.global_shortcut().on_shortcuts(
+                    [dictation_shortcut, command_shortcut, toggle_shortcut],
+                    move |_app, shortcut, event| {
+                        let is_dictation = shortcut.matches(
+                            Modifiers::CONTROL | Modifiers::ALT,
+                            Code::KeyD,
+                        );
+                        let is_command = shortcut.matches(
+                            Modifiers::CONTROL | Modifiers::ALT,
+                            Code::KeyC,
+                        );
+                        let is_toggle = shortcut.matches(
+                            Modifiers::CONTROL | Modifiers::ALT,
+                            Code::KeyS,
+                        );
 
-                    let mode = if is_dictation {
-                        "dictation"
-                    } else if is_command {
-                        "command"
-                    } else {
-                        return;
-                    };
-
-                    match event.state {
-                        ShortcutState::Pressed => {
-                            let _ = app_handle.emit("hotkey-pressed", mode);
+                        if is_toggle {
+                            if event.state == ShortcutState::Pressed {
+                                let _ = app_handle.emit("hotkey-toggle", "dictation");
+                            }
+                            return;
                         }
-                        ShortcutState::Released => {
-                            let _ = app_handle.emit("hotkey-released", mode);
+
+                        let mode = if is_dictation {
+                            "dictation"
+                        } else if is_command {
+                            "command"
+                        } else {
+                            return;
+                        };
+
+                        match event.state {
+                            ShortcutState::Pressed => {
+                                let _ = app_handle.emit("hotkey-pressed", mode);
+                            }
+                            ShortcutState::Released => {
+                                let _ = app_handle.emit("hotkey-released", mode);
+                            }
                         }
-                    }
-                },
-            )?;
+                    },
+                )?;
+            }
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Hide the main window instead of quitting so global hotkeys keep working.
+            if window.label() == "main" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running VoiceFlow");

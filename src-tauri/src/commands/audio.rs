@@ -1,4 +1,4 @@
-use crate::audio::recorder::{samples_to_wav, Recorder};
+use crate::audio::recorder::{samples_to_wav, AudioDevice, Recorder};
 use crate::state::AppState;
 use std::sync::{Arc, Mutex};
 use tauri::State;
@@ -59,6 +59,6 @@ pub async fn stop_recording(
 }
 
 #[tauri::command]
-pub async fn list_audio_devices() -> Result<Vec<String>, String> {
+pub async fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
     Recorder::list_devices()
 }

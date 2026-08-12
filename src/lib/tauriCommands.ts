@@ -10,6 +10,7 @@ export interface SettingsData {
   openai_api_key: string;
   dictation_hotkey: string;
   command_hotkey: string;
+  toggle_hotkey: string;
   selected_mic: string | null;
   personal_dictionary: string[];
 }
@@ -22,7 +23,12 @@ export async function stopRecording(): Promise<number[]> {
   return invoke("stop_recording");
 }
 
-export async function listAudioDevices(): Promise<string[]> {
+export interface AudioDevice {
+  name: string;   // internal source name used for recording
+  label: string;  // human-readable description shown in UI
+}
+
+export async function listAudioDevices(): Promise<AudioDevice[]> {
   return invoke("list_audio_devices");
 }
 

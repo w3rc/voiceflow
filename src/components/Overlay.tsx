@@ -21,7 +21,9 @@ export function Overlay() {
     };
   }, [setStatus]);
 
-  // Show/hide overlay based on status
+  // Show/hide overlay based on status — never steal focus from target app.
+  // The window is configured with focus:false in tauri.conf.json so show()
+  // will not take keyboard focus away from the user's active application.
   useEffect(() => {
     const win = getCurrentWindow();
     if (status === "idle") {

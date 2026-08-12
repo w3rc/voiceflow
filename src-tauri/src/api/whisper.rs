@@ -11,7 +11,10 @@ pub async fn transcribe(
     wav_data: Vec<u8>,
     prompt: Option<&str>,
 ) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
     let file_part = multipart::Part::bytes(wav_data)
         .file_name("audio.wav")
@@ -21,6 +24,7 @@ pub async fn transcribe(
     let mut form = multipart::Form::new()
         .part("file", file_part)
         .text("model", "whisper-1")
+        .text("language", "en")
         .text("response_format", "json");
 
     if let Some(p) = prompt {
